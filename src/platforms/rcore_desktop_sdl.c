@@ -92,6 +92,10 @@
     #endif
 #endif
 
+#if !defined(USING_VERSION_SDL3)
+    #define gbutton cbutton
+#endif
+
 #define SCANCODE_MAPPED_NUM     232
 
 //----------------------------------------------------------------------------------
@@ -1243,7 +1247,7 @@ void EnableCursor(void)
     SDL_SetRelativeMouseMode(SDL_FALSE);
 
 #if defined(USING_VERSION_SDL3)
-    // NOTE: SDL_ShowCursor() has been split into three functions:
+    // NOTE: SDL_ShowCursor() has been split into three functions: 
     // SDL_ShowCursor(), SDL_HideCursor(), and SDL_CursorVisible()
     SDL_ShowCursor();
 #else
@@ -2003,6 +2007,18 @@ int InitPlatform(void)
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
         }
+        else if (rlGetVersion() == RL_OPENGL_ES_31)                 // Request OpenGL ES 3.1 context
+        {
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+        }
+        else if (rlGetVersion() == RL_OPENGL_ES_32)                 // Request OpenGL ES 3.2 context
+        {
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+        }
 
         if (CORE.Window.flags & FLAG_MSAA_4X_HINT)
         {
@@ -2069,7 +2085,7 @@ int InitPlatform(void)
     {
         platform.gamepadId[i] = -1; // Set all gamepad initial instance ids as invalid to not conflict with instance id zero
     }
-
+#if defined(USING_VERSION_SDL3)
     int numJoysticks = 0;
     SDL_JoystickID *joysticks = SDL_GetJoysticks(&numJoysticks); // array of joystick IDs, they do not start from 0
 
@@ -2093,6 +2109,44 @@ int InitPlatform(void)
         }
         SDL_free(joysticks);
     }
+#else
+    int numJoysticks = SDL_NumJoysticks();
+    if (numJoysticks < 0) numJoysticks = 0;
+
+    for (int i = 0, gamepadCount = 0; i < numJoysticks && gamepadCount < MAX_GAMEPADS; i++)
+    {
+        if (SDL_IsGameController(i))
+        {
+            SDL_GameController *controller = SDL_GameControllerOpen(i);
+            if (controller)
+            {
+                SDL_Joystick *joystick = SDL_GameControllerGetJoystick(controller);
+                SDL_JoystickID instanceId = SDL_JoystickInstanceID(joystick);
+
+                platform.gamepad[gamepadCount] = controller;
+                platform.gamepadId[gamepadCount] = instanceId;
+
+                CORE.Input.Gamepad.ready[gamepadCount] = true;
+                CORE.Input.Gamepad.axisCount[gamepadCount] = SDL_JoystickNumAxes(joystick);
+                CORE.Input.Gamepad.axisState[gamepadCount][GAMEPAD_AXIS_LEFT_TRIGGER] = -1.0f;
+                CORE.Input.Gamepad.axisState[gamepadCount][GAMEPAD_AXIS_RIGHT_TRIGGER] = -1.0f;
+
+                const char *name = SDL_GameControllerName(controller);
+                if (name)
+                {
+                    strncpy(CORE.Input.Gamepad.name[gamepadCount], name, MAX_GAMEPAD_NAME_LENGTH - 1);
+                    CORE.Input.Gamepad.name[gamepadCount][MAX_GAMEPAD_NAME_LENGTH - 1] = '\0';
+                }
+
+                gamepadCount++;
+            }
+            else
+            {
+                TRACELOG(LOG_WARNING, "PLATFORM: Unable to open game controller %d [ERROR: %s]", i, SDL_GetError());
+            }
+        }
+    }
+#endif    
 
     // Disable mouse events being interpreted as touch events
     // NOTE: This is wanted because there are SDL_FINGER* events available which provide unique data

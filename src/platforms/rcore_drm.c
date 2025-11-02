@@ -824,6 +824,15 @@ void SwapScreenBuffer(void)
         return;
     }
 
+    // Get the software rendered color buffer
+    int bufferWidth = 0, bufferHeight = 0;
+    void *colorBuffer = swGetColorBuffer(&bufferWidth, &bufferHeight);
+    if (!colorBuffer)
+    {
+        TRACELOG(LOG_ERROR, "DISPLAY: Failed to get software color buffer");
+        return;
+    }
+
     // Retrieving the dimensions of the display mode used
     drmModeModeInfo *mode = &platform.connector->modes[platform.modeIndex];
     uint32_t width = mode->hdisplay;
@@ -891,8 +900,16 @@ void SwapScreenBuffer(void)
     }
 
     // Copy the software rendered buffer to the dumb buffer with scaling if needed
-    // NOTE: RLSW will make a simple copy if the dimensions match
-    swBlitFramebuffer(0, 0, width, height, 0, 0, width, height, SW_RGBA, SW_UNSIGNED_BYTE, dumbBuffer);
+    if (bufferWidth == width && bufferHeight == height)
+    {
+        // Direct copy if sizes match
+        swCopyFramebuffer(0, 0, bufferWidth, bufferHeight, SW_RGBA, SW_UNSIGNED_BYTE, dumbBuffer);
+    }
+    else
+    {
+        // Scale the software buffer to match the display mode
+        swBlitFramebuffer(0, 0, width, height, 0, 0, bufferWidth, bufferHeight, SW_RGBA, SW_UNSIGNED_BYTE, dumbBuffer);
+    }
 
     // Unmap the buffer
     munmap(dumbBuffer, creq.size);
@@ -1392,7 +1409,7 @@ int InitPlatform(void)
     }
 
     const EGLint framebufferAttribs[] = {
-        EGL_RENDERABLE_TYPE, (rlGetVersion() == RL_OPENGL_ES_30)? EGL_OPENGL_ES3_BIT : EGL_OPENGL_ES2_BIT, // Type of context support
+        EGL_RENDERABLE_TYPE, (rlGetVersion() == RL_OPENGL_ES_20)? EGL_OPENGL_ES2_BIT : EGL_OPENGL_ES3_BIT, // Type of context support
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT, // Don't use it on Android!
         EGL_RED_SIZE, 8,            // RED color bit depth (alternative: 5)
         EGL_GREEN_SIZE, 8,          // GREEN color bit depth (alternative: 6)

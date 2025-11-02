@@ -21,13 +21,14 @@
 *       Internal buffer (and resources) must be manually unloaded calling rlglClose()
 *
 *   CONFIGURATION:
-*       #define GRAPHICS_API_OPENGL_11_SOFTWARE
 *       #define GRAPHICS_API_OPENGL_11
 *       #define GRAPHICS_API_OPENGL_21
 *       #define GRAPHICS_API_OPENGL_33
 *       #define GRAPHICS_API_OPENGL_43
 *       #define GRAPHICS_API_OPENGL_ES2
 *       #define GRAPHICS_API_OPENGL_ES3
+        #define GRAPHICS_API_OPENGL_ES31
+        #define GRAPHICS_API_OPENGL_ES32
 *           Use selected OpenGL graphics backend, should be supported by platform
 *           Those preprocessor defines are only used on rlgl module, if OpenGL version is
 *           required by any other module, use rlGetVersion() to check it
@@ -156,7 +157,9 @@
     !defined(GRAPHICS_API_OPENGL_33) && \
     !defined(GRAPHICS_API_OPENGL_43) && \
     !defined(GRAPHICS_API_OPENGL_ES2) && \
-    !defined(GRAPHICS_API_OPENGL_ES3)
+    !defined(GRAPHICS_API_OPENGL_ES3) && \
+    !defined(GRAPHICS_API_OPENGL_ES31) && \
+    !defined(GRAPHICS_API_OPENGL_ES32)
         #define GRAPHICS_API_OPENGL_33
 #endif
 
@@ -194,6 +197,12 @@
 
 // OpenGL ES 3.0 uses OpenGL ES 2.0 functionality (and more)
 #if defined(GRAPHICS_API_OPENGL_ES3)
+    #define GRAPHICS_API_OPENGL_ES2
+#endif
+#if defined(GRAPHICS_API_OPENGL_ES31)
+    #define GRAPHICS_API_OPENGL_ES2
+#endif
+#if defined(GRAPHICS_API_OPENGL_ES32)
     #define GRAPHICS_API_OPENGL_ES2
 #endif
 
@@ -440,7 +449,9 @@ typedef enum {
     RL_OPENGL_33,               // OpenGL 3.3 (GLSL 330)
     RL_OPENGL_43,               // OpenGL 4.3 (using GLSL 330)
     RL_OPENGL_ES_20,            // OpenGL ES 2.0 (GLSL 100)
-    RL_OPENGL_ES_30             // OpenGL ES 3.0 (GLSL 300 es)
+    RL_OPENGL_ES_30,            // OpenGL ES 3.0 (GLSL 300 es)
+    RL_OPENGL_ES_31,            // OpenGL ES 3.1 (GLSL 310 es)
+    RL_OPENGL_ES_32             // OpenGL ES 3.2 (GLSL 320 es)
 } rlGlVersion;
 
 // Trace log level
@@ -884,30 +895,62 @@ RLAPI void rlLoadDrawQuad(void);     // Load and draw a quad
 #endif
 
 #if defined(GRAPHICS_API_OPENGL_ES3)
-    #include <GLES3/gl3.h>              // OpenGL ES 3.0 library
-    #define GL_GLEXT_PROTOTYPES
-    #include <GLES2/gl2ext.h>           // OpenGL ES 2.0 extensions library
+    // NOTE: OpenGL ES 3.0 can be enabled on Desktop platforms,
+    // in that case, functions are loaded from a custom glad for OpenGL ES 2.0
+    // TODO: OpenGL ES 3.0 support shouldn't be platform-dependant, neither require GLAD
+    #if defined(PLATFORM_DESKTOP_GLFW) || defined(PLATFORM_DESKTOP_SDL)
+        #define GLAD_GLES2_IMPLEMENTATION
+        #include "external/glad_gles2_3.0.h"
+    #else
+        #include <GLES3/gl3.h>              // OpenGL ES 3.0 library
+        #define GL_GLEXT_PROTOTYPES
+        #include <GLES2/gl2ext.h>           // OpenGL ES 2.0 extensions library
+    #endif
+#elif defined(GRAPHICS_API_OPENGL_ES31)
+    // NOTE: OpenGL ES 2.0 can be enabled on Desktop platforms,
+    // in that case, functions are loaded from a custom glad for OpenGL ES 2.0
+    // TODO: OpenGL ES 2.0 support shouldn't be platform-dependant, neither require GLAD
+    #if defined(PLATFORM_DESKTOP_GLFW) || defined(PLATFORM_DESKTOP_SDL)
+        #define GLAD_GLES2_IMPLEMENTATION
+        #include "external/glad_gles2_3.1.h"
+    #else
+        #include <GLES3/gl3.h>              // OpenGL ES 3.0 library
+        #define GL_GLEXT_PROTOTYPES
+        #include <GLES2/gl2ext.h>           // OpenGL ES 2.0 extensions library
+    #endif
+#elif defined(GRAPHICS_API_OPENGL_ES32)
+    // NOTE: OpenGL ES 2.0 can be enabled on Desktop platforms,
+    // in that case, functions are loaded from a custom glad for OpenGL ES 2.0
+    // TODO: OpenGL ES 2.0 support shouldn't be platform-dependant, neither require GLAD
+    #if defined(PLATFORM_DESKTOP_GLFW) || defined(PLATFORM_DESKTOP_SDL)
+        #define GLAD_GLES2_IMPLEMENTATION
+        #include "external/glad_gles2_3.2.h"
+    #else
+        #include <GLES3/gl3.h>              // OpenGL ES 3.0 library
+        #define GL_GLEXT_PROTOTYPES
+        #include <GLES2/gl2ext.h>           // OpenGL ES 2.0 extensions library
+    #endif
 #elif defined(GRAPHICS_API_OPENGL_ES2)
     // NOTE: OpenGL ES 2.0 can be enabled on Desktop platforms,
     // in that case, functions are loaded from a custom glad for OpenGL ES 2.0
     // TODO: OpenGL ES 2.0 support shouldn't be platform-dependant, neither require GLAD
     #if defined(PLATFORM_DESKTOP_GLFW) || defined(PLATFORM_DESKTOP_SDL)
         #define GLAD_GLES2_IMPLEMENTATION
-        #include "external/glad_gles2.h"
+        #include "external/glad_gles2_2.0_ori.h"
     #else
         #define GL_GLEXT_PROTOTYPES
         //#include <EGL/egl.h>          // EGL library -> not required, platform layer
         #include <GLES2/gl2.h>          // OpenGL ES 2.0 library
         #include <GLES2/gl2ext.h>       // OpenGL ES 2.0 extensions library
     #endif
-
-    // It seems OpenGL ES 2.0 instancing entry points are not defined on Raspberry Pi
-    // provided headers (despite being defined in official Khronos GLES2 headers)
-    #if defined(PLATFORM_DRM)
-    typedef void (GL_APIENTRYP PFNGLDRAWARRAYSINSTANCEDEXTPROC) (GLenum mode, GLint start, GLsizei count, GLsizei primcount);
-    typedef void (GL_APIENTRYP PFNGLDRAWELEMENTSINSTANCEDEXTPROC) (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei primcount);
-    typedef void (GL_APIENTRYP PFNGLVERTEXATTRIBDIVISOREXTPROC) (GLuint index, GLuint divisor);
-    #endif
+#endif
+    
+// It seems OpenGL ES 2.0 instancing entry points are not defined on Raspberry Pi
+// provided headers (despite being defined in official Khronos GLES2 headers)
+#if defined(PLATFORM_DRM)
+typedef void (GL_APIENTRYP PFNGLDRAWARRAYSINSTANCEDEXTPROC) (GLenum mode, GLint start, GLsizei count, GLsizei primcount);
+typedef void (GL_APIENTRYP PFNGLDRAWELEMENTSINSTANCEDEXTPROC) (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei primcount);
+typedef void (GL_APIENTRYP PFNGLVERTEXATTRIBDIVISOREXTPROC) (GLuint index, GLuint divisor);
 #endif
 
 #include <stdlib.h>                     // Required for: calloc(), free()
@@ -993,7 +1036,7 @@ RLAPI void rlLoadDrawQuad(void);     // Load and draw a quad
 
 #if defined(GRAPHICS_API_OPENGL_ES2)
     #define glClearDepth                 glClearDepthf
-    #if !defined(GRAPHICS_API_OPENGL_ES3)
+    #if !defined(GRAPHICS_API_OPENGL_ES3) && !defined(GRAPHICS_API_OPENGL_ES31) && !defined(GRAPHICS_API_OPENGL_ES32)
         #define GL_READ_FRAMEBUFFER         GL_FRAMEBUFFER
         #define GL_DRAW_FRAMEBUFFER         GL_FRAMEBUFFER
     #endif
@@ -1154,7 +1197,7 @@ static double rlCullDistanceFar = RL_CULL_DISTANCE_FAR;
 static rlglData RLGL = { 0 };
 #endif  // GRAPHICS_API_OPENGL_33 || GRAPHICS_API_OPENGL_ES2
 
-#if defined(GRAPHICS_API_OPENGL_ES2) && !defined(GRAPHICS_API_OPENGL_ES3)
+#if defined(GRAPHICS_API_OPENGL_ES2) && !defined(GRAPHICS_API_OPENGL_ES3) && !defined(GRAPHICS_API_OPENGL_ES31) && !defined(GRAPHICS_API_OPENGL_ES32)
 // NOTE: VAO functionality is exposed through extensions (OES)
 static PFNGLGENVERTEXARRAYSOESPROC glGenVertexArrays = NULL;
 static PFNGLBINDVERTEXARRAYOESPROC glBindVertexArray = NULL;
@@ -1874,7 +1917,7 @@ void rlEnableFramebuffer(unsigned int id)
 unsigned int rlGetActiveFramebuffer(void)
 {
     GLint fboId = 0;
-#if (defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES3)) && defined(RLGL_RENDER_TEXTURES_HINT)
+#if (defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES3) || defined(GRAPHICS_API_OPENGL_ES31) || defined(GRAPHICS_API_OPENGL_ES32)) && defined(RLGL_RENDER_TEXTURES_HINT)
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fboId);
 #endif
     return fboId;
@@ -1891,7 +1934,7 @@ void rlDisableFramebuffer(void)
 // Blit active framebuffer to main framebuffer
 void rlBlitFramebuffer(int srcX, int srcY, int srcWidth, int srcHeight, int dstX, int dstY, int dstWidth, int dstHeight, int bufferMask)
 {
-#if (defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES3)) && defined(RLGL_RENDER_TEXTURES_HINT)
+#if (defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES3) || defined(GRAPHICS_API_OPENGL_ES31) || defined(GRAPHICS_API_OPENGL_ES32)) && defined(RLGL_RENDER_TEXTURES_HINT)
     glBlitFramebuffer(srcX, srcY, srcWidth, srcHeight, dstX, dstY, dstWidth, dstHeight, bufferMask, GL_NEAREST);
 #endif
 }
@@ -1908,7 +1951,7 @@ void rlBindFramebuffer(unsigned int target, unsigned int framebuffer)
 // NOTE: One color buffer is always active by default
 void rlActiveDrawBuffers(int count)
 {
-#if ((defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES3)) && defined(RLGL_RENDER_TEXTURES_HINT))
+#if (defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES3) || defined(GRAPHICS_API_OPENGL_ES31) || defined(GRAPHICS_API_OPENGL_ES32)) && defined(RLGL_RENDER_TEXTURES_HINT)
     // NOTE: Maximum number of draw buffers supported is implementation dependant,
     // it can be queried with glGet*() but it must be at least 8
     //GLint maxDrawBuffers = 0;
@@ -2455,7 +2498,11 @@ void rlLoadExtensions(void *loader)
 
 #endif  // GRAPHICS_API_OPENGL_33
 
-#if defined(GRAPHICS_API_OPENGL_ES3)
+#if defined(GRAPHICS_API_OPENGL_ES3) || defined(GRAPHICS_API_OPENGL_ES31) || defined(GRAPHICS_API_OPENGL_ES32)
+    #if defined(PLATFORM_DESKTOP_GLFW) || defined(PLATFORM_DESKTOP_SDL)
+    if (gladLoadGLES2((GLADloadfunc)loader) == 0) TRACELOG(RL_LOG_WARNING, "GLAD: Cannot load OpenGL ES3.0 functions");
+    else TRACELOG(RL_LOG_INFO, "GLAD: OpenGL ES %s loaded successfully", rlGetVersion() == 6 ? "3.00" : (rlGetVersion() == 7 ? "3.10" : "3.20"));
+    #endif
     // Register supported extensions flags
     // OpenGL ES 3.0 extensions supported by default (or it should be)
     RLGL.ExtSupported.vao = true;
@@ -2485,6 +2532,7 @@ void rlLoadExtensions(void *loader)
     if (gladLoadGLES2((GLADloadfunc)loader) == 0) TRACELOG(RL_LOG_WARNING, "GLAD: Cannot load OpenGL ES2.0 functions");
     else TRACELOG(RL_LOG_INFO, "GLAD: OpenGL ES 2.0 loaded successfully");
     #endif
+#endif  // GRAPHICS_API_OPENGL_ES2
 
     // Get supported extensions list
     GLint numExt = 0;
@@ -2619,12 +2667,11 @@ void rlLoadExtensions(void *loader)
     // Free extensions pointers
     RL_FREE(extList);
     RL_FREE(extensionsDup);    // Duplicated string must be deallocated
-#endif  // GRAPHICS_API_OPENGL_ES2
 
     // Check OpenGL information and capabilities
     //------------------------------------------------------------------------------
     // Show current OpenGL and GLSL version
-    TRACELOG(RL_LOG_INFO, "GL: OpenGL device information:");
+    TRACELOG(RL_LOG_INFO, "GL: OpenGL device information: glGetString(%p)", glGetString);
     TRACELOG(RL_LOG_INFO, "    > Vendor:   %s", glGetString(GL_VENDOR));
     TRACELOG(RL_LOG_INFO, "    > Renderer: %s", glGetString(GL_RENDERER));
     TRACELOG(RL_LOG_INFO, "    > Version:  %s", glGetString(GL_VERSION));
@@ -2719,6 +2766,10 @@ int rlGetVersion(void)
 #endif
 #if defined(GRAPHICS_API_OPENGL_ES3)
     glVersion = RL_OPENGL_ES_30;
+#elif defined(GRAPHICS_API_OPENGL_ES31)
+    glVersion = RL_OPENGL_ES_31;
+#elif defined(GRAPHICS_API_OPENGL_ES32)
+    glVersion = RL_OPENGL_ES_32;
 #elif defined(GRAPHICS_API_OPENGL_ES2)
     glVersion = RL_OPENGL_ES_20;
 #endif
@@ -3417,7 +3468,7 @@ unsigned int rlLoadTextureDepth(int width, int height, bool useRenderBuffer)
     // Possible formats: GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT32 and GL_DEPTH_COMPONENT32F
     unsigned int glInternalFormat = GL_DEPTH_COMPONENT;
 
-#if (defined(GRAPHICS_API_OPENGL_ES2) || defined(GRAPHICS_API_OPENGL_ES3))
+#if (defined(GRAPHICS_API_OPENGL_ES2) || defined(GRAPHICS_API_OPENGL_ES3) || defined(GRAPHICS_API_OPENGL_ES31) || defined(GRAPHICS_API_OPENGL_ES32))
     // WARNING: WebGL platform requires unsized internal format definition (GL_DEPTH_COMPONENT)
     // while other platforms using OpenGL ES 2.0 require/support sized internal formats depending on the GPU capabilities
     if (!RLGL.ExtSupported.texDepthWebGL || useRenderBuffer)
@@ -3592,7 +3643,7 @@ void rlGetGlTextureFormats(int format, unsigned int *glInternalFormat, unsigned 
         case RL_PIXELFORMAT_UNCOMPRESSED_R4G4B4A4: *glInternalFormat = GL_RGBA; *glFormat = GL_RGBA; *glType = GL_UNSIGNED_SHORT_4_4_4_4; break;
         case RL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8: *glInternalFormat = GL_RGBA; *glFormat = GL_RGBA; *glType = GL_UNSIGNED_BYTE; break;
         #if !defined(GRAPHICS_API_OPENGL_11)
-        #if defined(GRAPHICS_API_OPENGL_ES3)
+        #if defined(GRAPHICS_API_OPENGL_ES3) || defined(GRAPHICS_API_OPENGL_ES31) || defined(GRAPHICS_API_OPENGL_ES32)
         case RL_PIXELFORMAT_UNCOMPRESSED_R32: if (RLGL.ExtSupported.texFloat32) *glInternalFormat = GL_R32F_EXT; *glFormat = GL_RED_EXT; *glType = GL_FLOAT; break;
         case RL_PIXELFORMAT_UNCOMPRESSED_R32G32B32: if (RLGL.ExtSupported.texFloat32) *glInternalFormat = GL_RGB32F_EXT; *glFormat = GL_RGB; *glType = GL_FLOAT; break;
         case RL_PIXELFORMAT_UNCOMPRESSED_R32G32B32A32: if (RLGL.ExtSupported.texFloat32) *glInternalFormat = GL_RGBA32F_EXT; *glFormat = GL_RGBA; *glType = GL_FLOAT; break;
@@ -4985,6 +5036,22 @@ static void rlLoadShaderDefault(void)
     "in vec4 vertexColor;               \n"
     "out vec2 fragTexCoord;             \n"
     "out vec4 fragColor;                \n"
+#elif defined(GRAPHICS_API_OPENGL_ES31)
+    "#version 310 es                    \n"
+    "precision mediump float;           \n"     // Precision required for OpenGL ES3 (WebGL 2) (on some browsers)
+    "in vec3 vertexPosition;            \n"
+    "in vec2 vertexTexCoord;            \n"
+    "in vec4 vertexColor;               \n"
+    "out vec2 fragTexCoord;             \n"
+    "out vec4 fragColor;                \n"
+#elif defined(GRAPHICS_API_OPENGL_ES32)
+    "#version 320 es                    \n"
+    "precision mediump float;           \n"     // Precision required for OpenGL ES3 (WebGL 2) (on some browsers)
+    "in vec3 vertexPosition;            \n"
+    "in vec2 vertexTexCoord;            \n"
+    "in vec4 vertexColor;               \n"
+    "out vec2 fragTexCoord;             \n"
+    "out vec4 fragColor;                \n"
 #elif defined(GRAPHICS_API_OPENGL_ES2)
     "#version 100                       \n"
     "precision mediump float;           \n"     // Precision required for OpenGL ES2 (WebGL) (on some browsers)
@@ -5043,6 +5110,34 @@ static void rlLoadShaderDefault(void)
     "    vec4 texelColor = texture(texture0, fragTexCoord);   \n"
     "    finalColor = texelColor*colDiffuse*fragColor;        \n"
     "}                                  \n";
+#elif defined(GRAPHICS_API_OPENGL_ES31)
+    "#version 310 es                    \n"
+    "precision mediump float;           \n"     // Precision required for OpenGL ES3 (WebGL 2)
+    "in vec2 fragTexCoord;              \n"
+    "in vec4 fragColor;                 \n"
+    "out vec4 finalColor;               \n"
+    "uniform sampler2D texture0;        \n"
+    "uniform vec4 colDiffuse;           \n"
+    "void main()                        \n"
+    "{                                  \n"
+    "    vec4 texelColor = texture(texture0, fragTexCoord);   \n"
+    "    finalColor = texelColor*colDiffuse*fragColor;        \n"
+    "}                                  \n";
+
+#elif defined(GRAPHICS_API_OPENGL_ES32)
+    "#version 320 es                    \n"
+    "precision mediump float;           \n"     // Precision required for OpenGL ES3 (WebGL 2)
+    "in vec2 fragTexCoord;              \n"
+    "in vec4 fragColor;                 \n"
+    "out vec4 finalColor;               \n"
+    "uniform sampler2D texture0;        \n"
+    "uniform vec4 colDiffuse;           \n"
+    "void main()                        \n"
+    "{                                  \n"
+    "    vec4 texelColor = texture(texture0, fragTexCoord);   \n"
+    "    finalColor = texelColor*colDiffuse*fragColor;        \n"
+    "}                                  \n";
+
 #elif defined(GRAPHICS_API_OPENGL_ES2)
     "#version 100                       \n"
     "precision mediump float;           \n"     // Precision required for OpenGL ES2 (WebGL)
